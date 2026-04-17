@@ -1,33 +1,26 @@
-version: "3.9"
-
 services:
-  agent:
-    build: .
+  travelbuddy-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travelbuddy-api
+    env_file:
+      - .env
+    environment:
+      PORT: 8000
+      OPENAI_MODEL: gpt-4o-mini
     ports:
       - "8000:8000"
-    environment:
-      - ENVIRONMENT=staging
-      - APP_NAME=Production AI Agent
-      - REDIS_URL=redis://redis:6379/0
-    env_file:
-      - .env.local
-    depends_on:
-      redis:
-        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+        ]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 15s
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3

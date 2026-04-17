@@ -5,7 +5,7 @@ Kết hợp:
   ✅ JWT Authentication
   ✅ Role-based access (user / admin)
   ✅ Rate limiting (sliding window)
-  ✅ Cost guard (daily budget)
+  ✅ Cost guard (monthly budget)
   ✅ Input validation
   ✅ Security headers
 
@@ -81,7 +81,8 @@ async def security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # Ẩn server info
-    response.headers.pop("server", None)
+    if "server" in response.headers:
+        del response.headers["server"]
     return response
 
 
@@ -140,8 +141,14 @@ async def ask_agent(
     limiter = rate_limiter_admin if role == "admin" else rate_limiter_user
     rate_info = limiter.check(username)
 
-    # ✅ Cost check trước khi gọi LLM
-    cost_guard.check_budget(username)
+    # ✅ Cost check trước khi gọi LLM (ước lượng để chặn sớm)
+    estimated_input_tokens = len(body.question.split()) * 2
+    estimated_output_tokens = 120  # mock estimate
+    estimated_cost = (
+        estimated_input_tokens / 1000 * 0.00015
+        + estimated_output_tokens / 1000 * 0.0006
+    )
+    cost_guard.check_budget(username, estimated_cost=estimated_cost)
 
     # Gọi LLM (mock)
     response_text = ask(body.question)
@@ -156,7 +163,7 @@ async def ask_agent(
         "answer": response_text,
         "usage": {
             "requests_remaining": rate_info["remaining"],
-            "budget_remaining_usd": usage.total_cost_usd,
+            "budget_remaining_usd": max(0.0, cost_guard.monthly_budget_usd - usage.total_cost_usd),
         },
     }
 
@@ -173,9 +180,9 @@ def admin_stats(user: dict = Depends(verify_token)):
     if user["role"] != "admin":
         raise HTTPException(403, "Admin only")
     return {
-        "total_users": "N/A (in-memory demo)",
-        "global_cost_usd": cost_guard._global_cost,
-        "global_budget_usd": cost_guard.global_daily_budget_usd,
+        "total_users": "N/A (redis-backed per-user monthly budget demo)",
+        "monthly_budget_per_user_usd": cost_guard.monthly_budget_usd,
+        "storage": "redis" if cost_guard._redis else "memory-fallback",
     }
 
 
@@ -195,8 +202,14 @@ def health():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
+    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
     print("\n=== Demo credentials ===")
-    print("  student / demo123  (10 req/min, $1/day budget)")
-    print("  teacher / teach456 (100 req/min, $1/day budget)")
+    print("  student / demo123  (10 req/min, $10/month budget)")
+    print("  teacher / teach456 (100 req/min, $10/month budget)")
     print(f"\nDocs: http://localhost:{port}/docs\n")
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=port,
+        reload=not is_production,
+    )

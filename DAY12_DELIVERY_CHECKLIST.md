@@ -1,218 +1,177 @@
-#  Delivery Checklist — Day 12 Lab Submission
+# Day 12 Delivery Checklist (Part 1-5)
 
-> **Student Name:** _________________________  
-> **Student ID:** _________________________  
-> **Date:** _________________________
-
----
-
-##  Submission Requirements
-
-Submit a **GitHub repository** containing:
-
-### 1. Mission Answers (40 points)
-
-Create a file `MISSION_ANSWERS.md` with your answers to all exercises:
-
-```markdown
-# Day 12 Lab - Mission Answers
-
-## Part 1: Localhost vs Production
-
-### Exercise 1.1: Anti-patterns found
-1. [Your answer]
-2. [Your answer]
-...
-
-### Exercise 1.3: Comparison table
-| Feature | Develop | Production | Why Important? |
-|---------|---------|------------|----------------|
-| Config  | ...     | ...        | ...            |
-...
-
-## Part 2: Docker
-
-### Exercise 2.1: Dockerfile questions
-1. Base image: [Your answer]
-2. Working directory: [Your answer]
-...
-
-### Exercise 2.3: Image size comparison
-- Develop: [X] MB
-- Production: [Y] MB
-- Difference: [Z]%
-
-## Part 3: Cloud Deployment
-
-### Exercise 3.1: Railway deployment
-- URL: https://your-app.railway.app
-- Screenshot: [Link to screenshot in repo]
-
-## Part 4: API Security
-
-### Exercise 4.1-4.3: Test results
-[Paste your test outputs]
-
-### Exercise 4.4: Cost guard implementation
-[Explain your approach]
-
-## Part 5: Scaling & Reliability
-
-### Exercise 5.1-5.5: Implementation notes
-[Your explanations and test results]
-```
+> Student Name: _________________________  
+> Student ID: _________________________  
+> Date: _________________________
 
 ---
 
-### 2. Full Source Code - Lab 06 Complete (60 points)
+## 1) Part 1 — Localhost vs Production
 
-Your final production-ready agent with all files:
+### Exercise 1.1: Anti-patterns (01-localhost-vs-production/develop/app.py)
+- [ ] Đã tìm ít nhất 5 vấn đề trong bản develop
+- [ ] Có nêu rõ vì sao từng vấn đề nguy hiểm trong production
 
-```
-your-repo/
-├── app/
-│   ├── main.py              # Main application
-│   ├── config.py            # Configuration
-│   ├── auth.py              # Authentication
-│   ├── rate_limiter.py      # Rate limiting
-│   └── cost_guard.py        # Cost protection
-├── utils/
-│   └── mock_llm.py          # Mock LLM (provided)
-├── Dockerfile               # Multi-stage build
-├── docker-compose.yml       # Full stack
-├── requirements.txt         # Dependencies
-├── .env.example             # Environment template
-├── .dockerignore            # Docker ignore
-├── railway.toml             # Railway config (or render.yaml)
-└── README.md                # Setup instructions
-```
+### Exercise 1.2: Run basic version
+- [ ] Chạy được app basic và gọi được `POST /ask`
+- [ ] Ghi nhận: chạy được local nhưng chưa production-ready
 
-**Requirements:**
--  All code runs without errors
--  Multi-stage Dockerfile (image < 500 MB)
--  API key authentication
--  Rate limiting (10 req/min)
--  Cost guard ($10/month)
--  Health + readiness checks
--  Graceful shutdown
--  Stateless design (Redis)
--  No hardcoded secrets
+### Exercise 1.3: Compare develop vs production
+- [ ] Hoàn thành bảng so sánh `app.py` (Config, Secrets, Port, Health check, Logging, Shutdown)
+- [ ] Hiểu vai trò environment variables và graceful shutdown
+
+### Checkpoint Part 1
+- [ ] Hiểu vì sao hardcoded secrets nguy hiểm
+- [ ] Biết cách dùng env vars
+- [ ] Hiểu health check endpoint
+- [ ] Hiểu graceful shutdown
 
 ---
 
-### 3. Service Domain Link
+## 2) Part 2 — Docker Containerization
 
-Create a file `DEPLOYMENT.md` with your deployed service information:
+### Exercise 2.1: Read Dockerfile (02-docker/develop/Dockerfile)
+- [ ] Trả lời được: base image, working directory
+- [ ] Giải thích được vì sao `COPY requirements.txt` trước source code
+- [ ] Phân biệt `CMD` và `ENTRYPOINT`
 
-```markdown
-# Deployment Information
+### Exercise 2.2: Build + Run develop image
+- [ ] Build thành công image develop
+- [ ] Run thành công container và test được endpoint
+- [ ] Ghi nhận được image size
 
-## Public URL
-https://your-agent.railway.app
+### Exercise 2.3: Multi-stage build (02-docker/production/Dockerfile)
+- [ ] Xác định đúng vai trò Stage 1 (builder) và Stage 2 (runtime)
+- [ ] Build thành công image production
+- [ ] So sánh size develop vs production và nêu lý do giảm kích thước
 
-## Platform
-Railway / Render / Cloud Run
+### Exercise 2.4: Docker Compose stack
+- [ ] Đọc `docker-compose.yml` và mô tả architecture
+- [ ] Chạy được stack bằng `docker compose`
+- [ ] Test được `/health` và `/ask` qua Nginx
 
-## Test Commands
-
-### Health Check
-```bash
-curl https://your-agent.railway.app/health
-# Expected: {"status": "ok"}
-```
-
-### API Test (with authentication)
-```bash
-curl -X POST https://your-agent.railway.app/ask \
-  -H "X-API-Key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": "test", "question": "Hello"}'
-```
-
-## Environment Variables Set
-- PORT
-- REDIS_URL
-- AGENT_API_KEY
-- LOG_LEVEL
-
-## Screenshots
-- [Deployment dashboard](screenshots/dashboard.png)
-- [Service running](screenshots/running.png)
-- [Test results](screenshots/test.png)
-```
-
-##  Pre-Submission Checklist
-
-- [ ] Repository is public (or instructor has access)
-- [ ] `MISSION_ANSWERS.md` completed with all exercises
-- [ ] `DEPLOYMENT.md` has working public URL
-- [ ] All source code in `app/` directory
-- [ ] `README.md` has clear setup instructions
-- [ ] No `.env` file committed (only `.env.example`)
-- [ ] No hardcoded secrets in code
-- [ ] Public URL is accessible and working
-- [ ] Screenshots included in `screenshots/` folder
-- [ ] Repository has clear commit history
+### Checkpoint Part 2
+- [ ] Hiểu cấu trúc Dockerfile
+- [ ] Hiểu lợi ích multi-stage build
+- [ ] Hiểu Docker Compose orchestration
+- [ ] Biết debug container (`docker logs`, `docker exec`)
 
 ---
 
-##  Self-Test
+## 3) Part 3 — Cloud Deployment
 
-Before submitting, verify your deployment:
+### Exercise 3.1: Railway
+- [ ] Deploy thành công từ thư mục `03-cloud-deployment/railway`
+- [ ] Set được env vars tối thiểu (`PORT`, `AGENT_API_KEY`)
+- [ ] Có public URL chạy được
+- [ ] Test thành công `/health` và `/ask` trên URL public
 
-```bash
-# 1. Health check
-curl https://your-app.railway.app/health
+### Exercise 3.2: Render
+- [ ] Đọc và hiểu `03-cloud-deployment/render/render.yaml`
+- [ ] So sánh khác biệt giữa `render.yaml` và `railway.toml`
 
-# 2. Authentication required
-curl https://your-app.railway.app/ask
-# Should return 401
+### Exercise 3.3 (Optional): Cloud Run
+- [ ] Đọc `cloudbuild.yaml` và `service.yaml`
+- [ ] Giải thích được pipeline CI/CD cơ bản
 
-# 3. With API key works
-curl -H "X-API-Key: YOUR_KEY" https://your-app.railway.app/ask \
-  -X POST -d '{"user_id":"test","question":"Hello"}'
-# Should return 200
-
-# 4. Rate limiting
-for i in {1..15}; do 
-  curl -H "X-API-Key: YOUR_KEY" https://your-app.railway.app/ask \
-    -X POST -d '{"user_id":"test","question":"test"}'; 
-done
-# Should eventually return 429
-```
+### Checkpoint Part 3
+- [ ] Deploy thành công ít nhất 1 cloud platform
+- [ ] Public URL hoạt động
+- [ ] Biết set env vars trên cloud
+- [ ] Biết xem logs trên platform
 
 ---
 
-##  Submission
+## 4) Part 4 — API Security
 
-**Submit your GitHub repository URL:**
+### Exercise 4.1: API Key auth (04-api-gateway/develop/app.py)
+- [ ] Xác định đúng nơi validate API key
+- [ ] Test được case không có key (401)
+- [ ] Test được case key hợp lệ (200)
+- [ ] Trả lời được cách rotate key
 
-```
-https://github.com/your-username/day12-agent-deployment
-```
+### Exercise 4.2: JWT auth (04-api-gateway/production)
+- [ ] Đọc và hiểu luồng trong `auth.py`
+- [ ] Lấy được token từ endpoint cấp token
+- [ ] Gọi được `/ask` bằng Bearer token
 
-**Deadline:** 17/4/2026
+### Exercise 4.3: Rate limiting
+- [ ] Đọc `rate_limiter.py` và xác định thuật toán
+- [ ] Xác định limit requests/minute
+- [ ] Test spam request và quan sát response 429
+
+### Exercise 4.4: Cost guard
+- [ ] Hoàn thiện logic trong `cost_guard.py`
+- [ ] Đảm bảo rule budget `$10/user/tháng`
+- [ ] Có cơ chế track spending theo tháng (Redis key theo month)
+
+### Checkpoint Part 4
+- [ ] Implement API key auth
+- [ ] Hiểu JWT flow
+- [ ] Implement rate limiting
+- [ ] Implement cost guard
 
 ---
 
-##  Quick Tips
+## 5) Part 5 — Scaling & Reliability
 
-1.  Test your public URL from a different device
-2.  Make sure repository is public or instructor has access
-3.  Include screenshots of working deployment
-4.  Write clear commit messages
-5.  Test all commands in DEPLOYMENT.md work
-6.  No secrets in code or commit history
+### Exercise 5.1: Health checks (05-scaling-reliability/develop/app.py)
+- [ ] Implement `GET /health` (liveness)
+- [ ] Implement `GET /ready` (readiness)
+- [ ] `ready` trả 200 khi dependency OK, 503 khi chưa sẵn sàng
+
+### Exercise 5.2: Graceful shutdown
+- [ ] Implement SIGTERM handler
+- [ ] Đảm bảo ngừng nhận request mới, hoàn tất request đang chạy, đóng kết nối
+- [ ] Test được hành vi shutdown khi gửi `kill -TERM`
+
+### Exercise 5.3: Stateless design
+- [ ] Refactor bỏ state trong memory
+- [ ] Lưu state cần thiết ra Redis/shared store
+- [ ] Giải thích được vì sao stateless quan trọng khi scale nhiều instance
+
+### Exercise 5.4: Load balancing
+- [ ] Chạy `docker compose up --scale agent=3`
+- [ ] Xác nhận Nginx phân phối request qua nhiều instance
+- [ ] Xác nhận failover khi 1 instance chết
+
+### Exercise 5.5: Stateless test
+- [ ] Chạy `test_stateless.py`
+- [ ] Xác nhận conversation không mất khi instance bị kill
+
+### Checkpoint Part 5
+- [ ] Có health + readiness checks
+- [ ] Có graceful shutdown
+- [ ] Thiết kế stateless
+- [ ] Có load balancing hoạt động
 
 ---
 
-##  Need Help?
+## 6) Hồ sơ nộp bắt buộc
 
-- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- Review [CODE_LAB.md](CODE_LAB.md)
-- Ask in office hours
-- Post in discussion forum
+### File bắt buộc
+- [ ] `MISSION_ANSWERS.md` (đủ câu trả lời Part 1-5)
+- [ ] `DEPLOYMENT.md` (public URL + lệnh test + ảnh chụp)
+- [ ] Source code đầy đủ trong repo
+- [ ] `README.md` hướng dẫn chạy rõ ràng
+
+### Security & hygiene
+- [ ] Không commit file `.env` (chỉ giữ `.env.example`)
+- [ ] Không hardcode secrets
+- [ ] Public URL còn truy cập được tại thời điểm nộp
+
+### Final self-test
+- [ ] `GET /health` trả OK
+- [ ] Không auth thì bị chặn đúng (401/403)
+- [ ] Có auth hợp lệ thì gọi API thành công
+- [ ] Vượt limit thì trả 429
 
 ---
 
-**Good luck! **
+## 7) Link nộp bài
+
+GitHub repository URL:
+
+`https://github.com/<your-username>/day12-agent-deployment`
+
+Deadline: **17/04/2026**

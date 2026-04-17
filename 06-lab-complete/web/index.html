@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TravelBuddy Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Spectral:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #13293d;
+        --slate: #1f3b4d;
+        --cream: #f8f3e8;
+        --sand: #f0e5cf;
+        --sun: #ffb703;
+        --mint: #83c5be;
+        --card: rgba(255, 255, 255, 0.86);
+        --border: rgba(19, 41, 61, 0.12);
+        --shadow: 0 14px 40px rgba(16, 36, 56, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 12% 14%, rgba(255, 183, 3, 0.28), transparent 44%),
+          radial-gradient(circle at 88% 12%, rgba(131, 197, 190, 0.35), transparent 45%),
+          linear-gradient(135deg, #f8f3e8 0%, #f6ead2 55%, #efe3cb 100%);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .shell {
+        width: min(920px, 100%);
+        height: min(88vh, 840px);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(6px);
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        animation: reveal 420ms ease-out;
+      }
+
+      @keyframes reveal {
+        from {
+          opacity: 0;
+          transform: translateY(10px) scale(0.99);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .topbar {
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(90deg, rgba(255, 183, 3, 0.14), rgba(131, 197, 190, 0.14));
+      }
+
+      .brand {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .subtitle {
+        margin: 6px 0 0;
+        color: #35566d;
+        font-size: 0.95rem;
+      }
+
+      .chat {
+        overflow-y: auto;
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .msg {
+        max-width: min(78%, 720px);
+        padding: 12px 14px;
+        border-radius: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        font-family: "Spectral", serif;
+        animation: bubble 220ms ease-out;
+      }
+
+      @keyframes bubble {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .msg.user {
+        align-self: flex-end;
+        background: #13293d;
+        color: #ffffff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .msg.bot {
+        align-self: flex-start;
+        background: #ffffff;
+        color: #223d52;
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+      }
+
+      .meta {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.75rem;
+        opacity: 0.72;
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      .composer {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 16px;
+        border-top: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .composer textarea {
+        width: 100%;
+        resize: none;
+        min-height: 56px;
+        max-height: 144px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        font: 500 0.98rem/1.45 "Space Grotesk", sans-serif;
+        color: var(--slate);
+        background: #fffdf8;
+      }
+
+      .composer textarea:focus {
+        outline: 2px solid rgba(255, 183, 3, 0.4);
+        border-color: #eeb232;
+      }
+
+      .composer button {
+        border: 0;
+        border-radius: 12px;
+        padding: 0 18px;
+        background: linear-gradient(145deg, #143a56, #0f2b42);
+        color: #fff;
+        font: 700 0.95rem "Space Grotesk", sans-serif;
+        cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+        box-shadow: 0 8px 20px rgba(15, 43, 66, 0.25);
+      }
+
+      .composer button:hover {
+        transform: translateY(-1px);
+      }
+
+      .composer button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .typing {
+        align-self: flex-start;
+        color: #486275;
+        font-size: 0.9rem;
+        display: none;
+      }
+
+      .typing.show {
+        display: block;
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 10px;
+        }
+
+        .shell {
+          height: 94vh;
+          border-radius: 18px;
+        }
+
+        .msg {
+          max-width: 92%;
+        }
+
+        .composer {
+          grid-template-columns: 1fr;
+        }
+
+        .composer button {
+          height: 46px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <h1 class="brand">TravelBuddy</h1>
+        <p class="subtitle">Trợ lý du lịch: hỏi chuyến bay, khách sạn, ngân sách.</p>
+      </header>
+
+      <section id="chat" class="chat" aria-live="polite">
+        <article class="msg bot">
+          Xin chào! Bạn muốn đi đâu và trong bao nhiêu ngày?
+        </article>
+        <p id="typing" class="typing">TravelBuddy đang suy nghĩ...</p>
+      </section>
+
+      <form id="composer" class="composer">
+        <textarea
+          id="message"
+          placeholder="Ví dụ: Tư vấn lịch trình Đà Nẵng 3 ngày cho 2 người, ngân sách 8 triệu"
+          required
+        ></textarea>
+        <button id="send" type="submit">Gửi</button>
+      </form>
+    </main>
+
+    <script>
+      const chatEl = document.getElementById("chat");
+      const formEl = document.getElementById("composer");
+      const messageEl = document.getElementById("message");
+      const sendEl = document.getElementById("send");
+      const typingEl = document.getElementById("typing");
+
+      const appendMessage = (text, role, traceId = "") => {
+        const box = document.createElement("article");
+        box.className = `msg ${role}`;
+        box.textContent = text;
+        if (traceId) {
+          const meta = document.createElement("small");
+          meta.className = "meta";
+          meta.textContent = `trace: ${traceId}`;
+          box.appendChild(meta);
+        }
+        chatEl.insertBefore(box, typingEl);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      };
+
+      const setPending = (pending) => {
+        sendEl.disabled = pending;
+        messageEl.disabled = pending;
+        typingEl.classList.toggle("show", pending);
+      };
+
+      formEl.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = messageEl.value.trim();
+        if (!message) return;
+
+        appendMessage(message, "user");
+        messageEl.value = "";
+        setPending(true);
+
+        try {
+          const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            const detail = payload?.detail || "Yêu cầu thất bại.";
+            appendMessage(`Lỗi: ${detail}`, "bot");
+          } else {
+            appendMessage(payload.reply || "(không có nội dung)", "bot", payload.trace_id || "");
+          }
+        } catch (error) {
+          appendMessage("Không kết nối được server. Vui lòng thử lại.", "bot");
+        } finally {
+          setPending(false);
+          messageEl.focus();
+        }
+      });
+
+      messageEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          formEl.requestSubmit();
+        }
+      });
+    </script>
+  </body>
+</html>

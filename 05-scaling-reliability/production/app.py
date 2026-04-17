@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -121,6 +121,11 @@ class ChatRequest(BaseModel):
     session_id: str | None = None  # None = tạo session mới
 
 
+class AskRequest(BaseModel):
+    question: str
+    session_id: str | None = None
+
+
 # ──────────────────────────────────────────────────────────
 # Endpoints
 # ──────────────────────────────────────────────────────────
@@ -154,6 +159,21 @@ async def chat(body: ChatRequest):
         "turn": len([m for m in history if m["role"] == "user"]) + 1,
         "served_by": INSTANCE_ID,  # ← thấy rõ bất kỳ instance nào cũng serve được
         "storage": "redis" if USE_REDIS else "in-memory",
+    }
+
+
+@app.post("/ask")
+async def ask_agent(body: AskRequest):
+    """
+    Alias cho /chat để đồng bộ với các phần trước của lab.
+    """
+    chat_result = await chat(ChatRequest(question=body.question, session_id=body.session_id))
+    return {
+        "session_id": chat_result["session_id"],
+        "question": chat_result["question"],
+        "answer": chat_result["answer"],
+        "served_by": chat_result["served_by"],
+        "storage": chat_result["storage"],
     }
 
 
@@ -217,4 +237,9 @@ def ready():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        reload=os.getenv("ENVIRONMENT", "development") != "production",
+    )

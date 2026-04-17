@@ -1,128 +1,154 @@
 """
-Cost Guard — Bảo Vệ Budget LLM
+Cost Guard — monthly budget per user, Redis-backed.
 
-Mục tiêu: Tránh bill bất ngờ từ LLM API.
-- Đếm tokens đã dùng mỗi ngày
-- Cảnh báo khi gần hết budget
-- Block khi vượt budget
-
-Trong production: lưu trong Redis/DB, không phải in-memory.
+Rule cho bài lab:
+- Mỗi user có budget $10 / tháng
+- Track spending theo key tháng trong Redis
+- Raise 402 khi vượt budget
 """
-import time
+import os
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from fastapi import HTTPException
+
+try:
+    import redis
+except ImportError:  # pragma: no cover
+    redis = None
 
 logger = logging.getLogger(__name__)
 
-
-# Giá token (tham khảo, thay đổi theo model)
-PRICE_PER_1K_INPUT_TOKENS = 0.00015   # GPT-4o-mini: $0.15/1M input
-PRICE_PER_1K_OUTPUT_TOKENS = 0.0006   # GPT-4o-mini: $0.60/1M output
+PRICE_PER_1K_INPUT_TOKENS = 0.00015
+PRICE_PER_1K_OUTPUT_TOKENS = 0.0006
 
 
 @dataclass
 class UsageRecord:
     user_id: str
-    input_tokens: int = 0
-    output_tokens: int = 0
-    request_count: int = 0
-    day: str = field(default_factory=lambda: time.strftime("%Y-%m-%d"))
-
-    @property
-    def total_cost_usd(self) -> float:
-        input_cost = (self.input_tokens / 1000) * PRICE_PER_1K_INPUT_TOKENS
-        output_cost = (self.output_tokens / 1000) * PRICE_PER_1K_OUTPUT_TOKENS
-        return round(input_cost + output_cost, 6)
+    month: str
+    input_tokens: int
+    output_tokens: int
+    request_count: int
+    total_cost_usd: float
 
 
 class CostGuard:
-    def __init__(
-        self,
-        daily_budget_usd: float = 1.0,       # $1/ngày per user
-        global_daily_budget_usd: float = 10.0, # $10/ngày tổng cộng
-        warn_at_pct: float = 0.8,              # Cảnh báo khi dùng 80%
-    ):
-        self.daily_budget_usd = daily_budget_usd
-        self.global_daily_budget_usd = global_daily_budget_usd
-        self.warn_at_pct = warn_at_pct
-        self._records: dict[str, UsageRecord] = {}
-        self._global_today = time.strftime("%Y-%m-%d")
-        self._global_cost = 0.0
+    def __init__(self, monthly_budget_usd: float = 10.0):
+        self.monthly_budget_usd = monthly_budget_usd
+        self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        self._fallback_cache: dict[str, dict[str, float | int]] = {}
+        self._redis = None
+        if redis is not None:
+            try:
+                self._redis = redis.from_url(self.redis_url, decode_responses=True)
+                self._redis.ping()
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Redis unavailable, using in-memory fallback: %s", exc)
+                self._redis = None
 
-    def _get_record(self, user_id: str) -> UsageRecord:
-        today = time.strftime("%Y-%m-%d")
-        record = self._records.get(user_id)
-        if not record or record.day != today:
-            self._records[user_id] = UsageRecord(user_id=user_id, day=today)
-        return self._records[user_id]
+    @staticmethod
+    def _month_key() -> str:
+        return datetime.now(timezone.utc).strftime("%Y-%m")
 
-    def check_budget(self, user_id: str) -> None:
-        """
-        Kiểm tra budget trước khi gọi LLM.
-        Raise 402 nếu vượt budget.
-        """
-        record = self._get_record(user_id)
+    def _key(self, user_id: str, month: str) -> str:
+        return f"budget:{user_id}:{month}"
 
-        # Global budget check
-        if self._global_cost >= self.global_daily_budget_usd:
-            logger.critical(f"GLOBAL BUDGET EXCEEDED: ${self._global_cost:.4f}")
-            raise HTTPException(
-                status_code=503,
-                detail="Service temporarily unavailable due to budget limits. Try again tomorrow.",
+    def _read(self, user_id: str, month: str) -> dict[str, float | int]:
+        key = self._key(user_id, month)
+        if self._redis:
+            raw = self._redis.hgetall(key)
+            if not raw:
+                return {"cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "requests": 0}
+            return {
+                "cost_usd": float(raw.get("cost_usd", 0.0)),
+                "input_tokens": int(raw.get("input_tokens", 0)),
+                "output_tokens": int(raw.get("output_tokens", 0)),
+                "requests": int(raw.get("requests", 0)),
+            }
+        return self._fallback_cache.get(
+            key,
+            {"cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "requests": 0},
+        )
+
+    def _write(self, user_id: str, month: str, data: dict[str, float | int]) -> None:
+        key = self._key(user_id, month)
+        if self._redis:
+            ttl_seconds = 32 * 24 * 3600
+            self._redis.hset(
+                key,
+                mapping={
+                    "cost_usd": str(data["cost_usd"]),
+                    "input_tokens": str(data["input_tokens"]),
+                    "output_tokens": str(data["output_tokens"]),
+                    "requests": str(data["requests"]),
+                },
             )
+            self._redis.expire(key, ttl_seconds)
+            return
+        self._fallback_cache[key] = data
 
-        # Per-user budget check
-        if record.total_cost_usd >= self.daily_budget_usd:
+    def _estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
+        value = (
+            (input_tokens / 1000) * PRICE_PER_1K_INPUT_TOKENS
+            + (output_tokens / 1000) * PRICE_PER_1K_OUTPUT_TOKENS
+        )
+        return round(value, 6)
+
+    def check_budget(self, user_id: str, estimated_cost: float = 0.0) -> None:
+        month = self._month_key()
+        record = self._read(user_id, month)
+        projected = float(record["cost_usd"]) + estimated_cost
+        if projected > self.monthly_budget_usd:
             raise HTTPException(
-                status_code=402,  # Payment Required
+                status_code=402,
                 detail={
-                    "error": "Daily budget exceeded",
-                    "used_usd": record.total_cost_usd,
-                    "budget_usd": self.daily_budget_usd,
-                    "resets_at": "midnight UTC",
+                    "error": "Monthly budget exceeded",
+                    "month": month,
+                    "used_usd": round(float(record["cost_usd"]), 6),
+                    "estimated_next_cost_usd": round(estimated_cost, 6),
+                    "budget_usd": self.monthly_budget_usd,
                 },
             )
 
-        # Warning khi gần hết budget
-        if record.total_cost_usd >= self.daily_budget_usd * self.warn_at_pct:
-            logger.warning(
-                f"User {user_id} at {record.total_cost_usd/self.daily_budget_usd*100:.0f}% budget"
-            )
+    def record_usage(self, user_id: str, input_tokens: int, output_tokens: int) -> UsageRecord:
+        month = self._month_key()
+        record = self._read(user_id, month)
+        cost = self._estimate_cost(input_tokens, output_tokens)
 
-    def record_usage(
-        self, user_id: str, input_tokens: int, output_tokens: int
-    ) -> UsageRecord:
-        """Ghi nhận usage sau khi gọi LLM xong."""
-        record = self._get_record(user_id)
-        record.input_tokens += input_tokens
-        record.output_tokens += output_tokens
-        record.request_count += 1
+        updated = {
+            "cost_usd": round(float(record["cost_usd"]) + cost, 6),
+            "input_tokens": int(record["input_tokens"]) + input_tokens,
+            "output_tokens": int(record["output_tokens"]) + output_tokens,
+            "requests": int(record["requests"]) + 1,
+        }
+        self._write(user_id, month, updated)
 
-        cost = (input_tokens / 1000 * PRICE_PER_1K_INPUT_TOKENS +
-                output_tokens / 1000 * PRICE_PER_1K_OUTPUT_TOKENS)
-        self._global_cost += cost
-
-        logger.info(
-            f"Usage: user={user_id} req={record.request_count} "
-            f"cost=${record.total_cost_usd:.4f}/{self.daily_budget_usd}"
+        return UsageRecord(
+            user_id=user_id,
+            month=month,
+            input_tokens=int(updated["input_tokens"]),
+            output_tokens=int(updated["output_tokens"]),
+            request_count=int(updated["requests"]),
+            total_cost_usd=float(updated["cost_usd"]),
         )
-        return record
 
     def get_usage(self, user_id: str) -> dict:
-        record = self._get_record(user_id)
+        month = self._month_key()
+        record = self._read(user_id, month)
+        used = float(record["cost_usd"])
         return {
             "user_id": user_id,
-            "date": record.day,
-            "requests": record.request_count,
-            "input_tokens": record.input_tokens,
-            "output_tokens": record.output_tokens,
-            "cost_usd": record.total_cost_usd,
-            "budget_usd": self.daily_budget_usd,
-            "budget_remaining_usd": max(0, self.daily_budget_usd - record.total_cost_usd),
-            "budget_used_pct": round(record.total_cost_usd / self.daily_budget_usd * 100, 1),
+            "month": month,
+            "requests": int(record["requests"]),
+            "input_tokens": int(record["input_tokens"]),
+            "output_tokens": int(record["output_tokens"]),
+            "cost_usd": used,
+            "budget_usd": self.monthly_budget_usd,
+            "budget_remaining_usd": max(0.0, round(self.monthly_budget_usd - used, 6)),
+            "budget_used_pct": round((used / self.monthly_budget_usd) * 100, 2),
+            "storage": "redis" if self._redis else "memory-fallback",
         }
 
 
-# Singleton
-cost_guard = CostGuard(daily_budget_usd=1.0, global_daily_budget_usd=10.0)
+cost_guard = CostGuard(monthly_budget_usd=10.0)

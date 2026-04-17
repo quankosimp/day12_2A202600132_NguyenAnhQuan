@@ -1,100 +1,139 @@
-# Lab 12 — Complete Production Agent
+# TravelBuddy Agent
 
-Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
+Project này là một demo agent tư vấn du lịch bằng Python, dùng `LangGraph` để điều phối hội thoại và `tool calling` để xử lý các tác vụ nghiệp vụ như tìm chuyến bay, tìm khách sạn và tính ngân sách.
 
-## Checklist Deliverable
+## Thành phần chính
 
-- [x] Dockerfile (multi-stage, < 500 MB)
-- [x] docker-compose.yml (agent + redis)
-- [x] .dockerignore
-- [x] Health check endpoint (`GET /health`)
-- [x] Readiness endpoint (`GET /ready`)
-- [x] API Key authentication
-- [x] Rate limiting
-- [x] Cost guard
-- [x] Config từ environment variables
-- [x] Structured logging
-- [x] Graceful shutdown
-- [x] Public URL ready (Railway / Render config)
+- `agent.py`: khởi tạo model, nạp system prompt, bind tool và chạy graph hội thoại.
+- `tools.py`: chứa dữ liệu mock và 3 tool nghiệp vụ:
+  - `search_flights`
+  - `search_hotels`
+  - `calculate_budget`
+- `system_prompt.txt`: prompt hệ thống cho persona, guardrail và format phản hồi.
+- `usercases.md`: các test case mẫu để kiểm tra hành vi agent.
+- `test.py`: chạy toàn bộ prompt trong `usercases.md` và lưu kết quả vào `test_results.md`.
 
----
+## Luồng hoạt động
 
-## Cấu Trúc
+Người dùng nhập yêu cầu du lịch, agent sẽ phân tích intent rồi quyết định:
 
-```
-06-lab-complete/
-├── app/
-│   ├── main.py         # Entry point — kết hợp tất cả
-│   ├── config.py       # 12-factor config
-│   ├── auth.py         # API Key + JWT
-│   ├── rate_limiter.py # Rate limiting
-│   └── cost_guard.py   # Budget protection
-├── Dockerfile          # Multi-stage, production-ready
-├── docker-compose.yml  # Full stack
-├── railway.toml        # Deploy Railway
-├── render.yaml         # Deploy Render
-├── .env.example        # Template
-├── .dockerignore
-└── requirements.txt
+- trả lời trực tiếp nếu chỉ cần hỏi đáp
+- gọi một hoặc nhiều tool nếu cần tra cứu chuyến bay, khách sạn hoặc tính chi phí
+- tổng hợp kết quả cuối thành câu trả lời tiếng Việt
+
+## Cài đặt
+
+Tạo file `.env`:
+
+```env
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
----
-
-## Chạy Local
+Cài dependency:
 
 ```bash
-# 1. Setup
-cp .env.example .env
-
-# 2. Chạy với Docker Compose
-docker compose up
-
-# 3. Test
-curl http://localhost/health
-
-# 4. Lấy API key từ .env, test endpoint
-API_KEY=$(grep AGENT_API_KEY .env | cut -d= -f2)
-curl -H "X-API-Key: $API_KEY" \
-     -X POST http://localhost/ask \
-     -H "Content-Type: application/json" \
-     -d '{"question": "What is deployment?"}'
+venv/bin/pip install -r requirements.txt
 ```
 
----
+## Cách chạy
 
-## Deploy Railway (< 5 phút)
+Chạy agent dạng CLI:
 
 ```bash
-# Cài Railway CLI
-npm i -g @railway/cli
-
-# Login và deploy
-railway login
-railway init
-railway variables set OPENAI_API_KEY=sk-...
-railway variables set AGENT_API_KEY=your-secret-key
-railway up
-
-# Nhận public URL!
-railway domain
+venv/bin/python agent.py
 ```
 
----
-
-## Deploy Render
-
-1. Push repo lên GitHub
-2. Render Dashboard → New → Blueprint
-3. Connect repo → Render đọc `render.yaml`
-4. Set secrets: `OPENAI_API_KEY`, `AGENT_API_KEY`
-5. Deploy → Nhận URL!
-
----
-
-## Kiểm Tra Production Readiness
+Chạy API local:
 
 ```bash
-python check_production_ready.py
+venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Script này kiểm tra tất cả items trong checklist và báo cáo những gì còn thiếu.
+Mở giao diện chat:
+
+```bash
+http://localhost:8000/
+```
+
+Healthcheck:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Trạng thái service dạng JSON:
+
+```bash
+curl http://localhost:8000/status
+```
+
+Chat API:
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Tư vấn chuyến đi Đà Nẵng 3 ngày từ Hà Nội"}'
+```
+
+Chạy test cases và ghi kết quả:
+
+```bash
+venv/bin/python test.py
+```
+
+## Ghi chú
+
+- Dữ liệu chuyến bay và khách sạn hiện là mock data trong `tools.py`.
+- Kết quả agent phụ thuộc vào model và prompt hiện tại.
+- `test_results.md` giúp quan sát trace tool call và phản hồi cuối để debug hành vi agent.
+
+## Deploy Railway
+
+1. Push code lên GitHub.
+2. Trên Railway: `New Project` -> `Deploy from GitHub repo`.
+3. Railway sẽ dùng:
+   - `requirements.txt` để cài dependency
+   - `runtime.txt` để chọn Python version
+   - `Procfile` để chạy service web
+4. Thêm biến môi trường trên Railway:
+   - `OPENAI_API_KEY` (bắt buộc)
+   - `OPENAI_MODEL` (khuyến nghị, mặc định `gpt-4o-mini`)
+   - `LOG_LEVEL` (tuỳ chọn)
+5. Sau khi deploy, kiểm tra:
+   - `GET /health` trả `{ "status": "ok" }`
+   - `POST /chat` trả `reply` và `trace_id`
+
+## Chạy bằng Docker Compose (local)
+
+1. Tạo `.env` (ít nhất có `OPENAI_API_KEY`).
+2. Build và chạy:
+
+```bash
+docker compose up --build
+```
+
+3. Kiểm tra:
+
+```bash
+curl http://localhost:8000/health
+```
+
+4. Dừng dịch vụ:
+
+```bash
+docker compose down
+```
+
+## Deploy Railway bằng Dockerfile
+
+- Railway **không dùng trực tiếp** `docker-compose.yml` để deploy một service.
+- Railway sẽ build từ `Dockerfile` trong repo.
+- Steps:
+  1. Push code lên GitHub.
+  2. Trên Railway tạo project từ repo.
+  3. Set biến môi trường:
+     - `OPENAI_API_KEY` (bắt buộc)
+     - `OPENAI_MODEL` (khuyến nghị, mặc định `gpt-4o-mini`)
+     - `LOG_LEVEL` (tuỳ chọn)
+  4. Deploy và kiểm tra `/health`, `/chat`.
